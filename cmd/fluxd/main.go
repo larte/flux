@@ -199,13 +199,11 @@ func main() {
 	}
 
 	shutdown := make(chan struct{})
+	shutdownWg := &sync.WaitGroup{}
 
-	queueWg := &sync.WaitGroup{}
 	var jobs *job.Queue
 	{
-		jobs = job.NewQueue()
-		queueWg.Add(1)
-		go jobs.Loop(shutdown, queueWg)
+		jobs = job.NewQueue(shutdown, shutdownWg)
 	}
 
 	daemon := &daemon.Daemon{
@@ -241,9 +239,8 @@ func main() {
 		logger.Log("upstream", "no upstream URL given")
 	}
 
-	daemonWg := &sync.WaitGroup{}
-	daemonWg.Add(1)
-	go daemon.Loop(shutdown, daemonWg, log.NewContext(logger).With("component", "sync-loop"))
+	shutdownWg.Add(1)
+	go daemon.Loop(shutdown, shutdownWg, log.NewContext(logger).With("component", "sync-loop"))
 
 	// Mechanical components.
 	errc := make(chan error)
@@ -266,6 +263,5 @@ func main() {
 	// Go!
 	logger.Log("exiting", <-errc)
 	close(shutdown)
-	daemonWg.Wait()
-	queueWg.Wait()
+	shutdownWg.Wait()
 }
